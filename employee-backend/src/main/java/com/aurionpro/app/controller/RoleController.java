@@ -1,0 +1,45 @@
+package com.aurionpro.app.controller;
+
+import com.aurionpro.app.dto.RoleDto;
+import com.aurionpro.app.dto.RoleRequestDto;
+import com.aurionpro.app.service.RoleService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+@Tag(name = "Role API", description = "API for managing roles")
+@RestController
+@RequestMapping("/api/roles")
+@CrossOrigin("http://localhost:4200")
+public class RoleController {
+
+    private final RoleService roleService;
+
+    public RoleController(RoleService roleService) {
+        this.roleService = roleService;
+    }
+
+    @Operation(summary = "Add a new role to a department")
+    @PostMapping
+    public ResponseEntity<RoleDto> addRole(@Valid @RequestBody RoleRequestDto roleRequestDto) {
+        RoleDto createdRole = roleService.addRole(roleRequestDto);
+        return new ResponseEntity<>(createdRole, HttpStatus.CREATED);
+    }
+
+    @Operation(summary = "Get all available roles")
+    @GetMapping
+    public ResponseEntity<List<RoleDto>> getAllRoles() {
+        List<RoleDto> roles = roleService.getAllRoles();
+        return ResponseEntity.ok(roles);
+    }
+}

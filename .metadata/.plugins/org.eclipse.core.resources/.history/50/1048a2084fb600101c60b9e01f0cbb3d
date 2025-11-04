@@ -1,0 +1,68 @@
+package com.aurionpro.app.service.impl;
+
+import com.aurionpro.app.dto.RoleDto;
+import com.aurionpro.app.dto.RoleRequestDto;
+import com.aurionpro.app.entity.Department;
+import com.aurionpro.app.entity.Role;
+import com.aurionpro.app.exception.DuplicateResourceException;
+import com.aurionpro.app.exception.ResourceNotFoundException;
+import com.aurionpro.app.mapper.RoleMapper;
+import com.aurionpro.app.repository.DepartmentRepository;
+import com.aurionpro.app.repository.RoleRepository;
+import com.aurionpro.app.service.RoleService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional
+@Slf4j
+public class RoleServiceImpl implements RoleService {
+
+    private final RoleRepository roleRepository;
+    private final DepartmentRepository departmentRepository;
+    private final RoleMapper roleMapper;
+
+    public RoleServiceImpl(RoleRepository roleRepository, DepartmentRepository departmentRepository, RoleMapper roleMapper) {
+        this.roleRepository = roleRepository;
+        this.departmentRepository = departmentRepository;
+        this.roleMapper = roleMapper;
+    }
+
+    @Override
+    public RoleDto addRole(RoleRequestDto roleRequestDto) {
+        log.info("Attempting to add new role '{}' to department ID {}", roleRequestDto.getName(), roleRequestDto.getDepartmentId());
+
+        Department department = departmentRepository.findById(roleRequestDto.getDepartmentId())
+                .orElseThrow(() -> {
+                    log.error("Department not found with ID: {}", roleRequestDto.getDepartmentId());
+                    return new ResourceNotFoundException("Department not found with ID: " + roleRequestDto.getDepartmentId());
+                });
+
+        // Check if a role with the same name already exists in this department
+        if (roleRepository.existsByNameAndDepartmentId(roleRequestDto.getName(), roleRequestDto.getDepartmentId())) {
+            log.error("Role with name '{}' already exists in department '{}'", roleRequestDto.getName(), department.getName());
+            throw new DuplicateResourceException("Role with name '" + roleRequestDto.getName() + "' already exists in this department.");
+        }
+
+        Role role = new Role();
+        role.setName(roleRequestDto.getName());
+        role.setDepartment(department);
+
+        Role savedRole = roleRepository.save(role);
+        log.info("Successfully added role with ID {}", savedRole.getId());
+        return roleMapper.toDto(savedRole);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RoleDto> getAllRoles() {
+        return roleRepository.findAll()
+                .stream()
+                .map(roleMapper::toDto)
+                .collect(Collectors.toList());
+    }
+}

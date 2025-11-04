@@ -1,0 +1,13 @@
+package com.aurionpro.app.mapper;
+
+import com.aurionpro.app.dto.RoleDto;
+import com.aurionpro.app.entity.Role;
+import org.mapstruct.Mapper;
+
+@Mapper(componentModel = "spring")
+public interface RoleMapper {
+
+    RoleDto toDto(Role role);
+
+    Role toEntity(RoleDto roleDto);
+}

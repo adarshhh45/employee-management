@@ -1,0 +1,16 @@
+package com.aurionpro.app.mapper;
+
+import com.aurionpro.app.dto.EmployeeRequestDto;
+import com.aurionpro.app.dto.EmployeeResponseDto;
+import com.aurionpro.app.model.Employee;
+import org.mapstruct.Mapper;
+
+@Mapper(componentModel = "spring")
+public interface EmployeeMapper {
+
+    // Maps an Employee Entity -> EmployeeResponseDto (for output)
+    EmployeeResponseDto toResponseDto(Employee employee);
+
+    // Maps an EmployeeRequestDto (for input) -> Employee Entity
+    Employee toEntity(EmployeeRequestDto requestDto);
+}

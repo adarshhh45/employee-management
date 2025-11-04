@@ -1,0 +1,169 @@
+package com.aurionpro.app.service.impl;
+
+import com.aurionpro.app.dto.EmployeeRequestDto;
+import com.aurionpro.app.dto.EmployeeResponseDto;
+import com.aurionpro.app.entity.Employee;
+import com.aurionpro.app.entity.Role;
+import com.aurionpro.app.exception.DuplicateResourceException;
+import com.aurionpro.app.exception.ResourceNotFoundException;
+import com.aurionpro.app.mapper.EmployeeMapper;
+import com.aurionpro.app.repository.EmployeeRepository;
+import com.aurionpro.app.repository.RoleRepository;
+import com.aurionpro.app.service.EmployeeService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional
+@Slf4j
+public class EmployeeServiceImpl implements EmployeeService {
+
+	private final EmployeeRepository employeeRepository;
+	private final RoleRepository roleRepository;
+	private final EmployeeMapper employeeMapper;
+
+	public EmployeeServiceImpl(EmployeeRepository employeeRepository, RoleRepository roleRepository,
+			EmployeeMapper employeeMapper) {
+		this.employeeRepository = employeeRepository;
+		this.roleRepository = roleRepository;
+		this.employeeMapper = employeeMapper;
+	}
+
+	@Override
+	public EmployeeResponseDto addEmployee(EmployeeRequestDto requestDto) {
+		log.info("Attempting to add a new employee with email: {}", requestDto.getEmail());
+
+		if (employeeRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail())) {
+			log.error("Failed to add employee. Email {} already exists.", requestDto.getEmail());
+			throw new DuplicateResourceException("Employee with email " + requestDto.getEmail() + " already exists.");
+		}
+		if (employeeRepository.existsByPhoneNumberAndIsDeletedFalse(requestDto.getPhoneNumber())) {
+			log.error("Failed to add employee. Phone number {} already exists.", requestDto.getPhoneNumber());
+			throw new DuplicateResourceException(
+					"Employee with phone number " + requestDto.getPhoneNumber() + " already exists.");
+		}
+
+		roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
+			log.error("Failed to add employee. Role not found with ID: {}", requestDto.getRoleId());
+			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
+		});
+
+		Employee employee = employeeMapper.toEntity(requestDto);
+		Employee savedEmployee = employeeRepository.save(employee);
+
+		log.info("Successfully added new employee with ID: {} and Email: {}", savedEmployee.getId(),
+				savedEmployee.getEmail());
+		return employeeMapper.toResponseDto(savedEmployee);
+	}
+
+	@Override
+	public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto requestDto) {
+		log.info("Attempting to update employee with ID: {}", id);
+
+		Employee existingEmployee = employeeRepository.findByIdAndIsDeletedFalse(id).orElseThrow(() -> {
+			log.error("Failed to update. Employee not found with ID: {}", id);
+			return new ResourceNotFoundException("Employee not found with ID: " + id);
+		});
+		
+		Optional<Employee> employeeWithSamePhone = employeeRepository.findByPhoneNumberAndIsDeletedFalse(requestDto.getPhoneNumber());
+        if (employeeWithSamePhone.isPresent() && !employeeWithSamePhone.get().getId().equals(id)) {
+            log.error("Failed to update employee ID: {}. Phone number {} is already in use by employee ID: {}", id, requestDto.getPhoneNumber(), employeeWithSamePhone.get().getId());
+            throw new DuplicateResourceException("Phone number " + requestDto.getPhoneNumber() + " is already in use by another employee.");
+        }
+
+		Role role = roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
+			log.error("Failed to update employee ID: {}. Role not found with ID: {}", id, requestDto.getRoleId());
+			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
+		});
+
+		Optional<Employee> employeeWithSamePhone = employeeRepository
+				.findByPhoneNumberAndIsDeletedFalse(requestDto.getPhoneNumber());
+		if (employeeWithSamePhone.isPresent() && !employeeWithSamePhone.get().getId().equals(id)) {
+			// A different employee already has this phone number
+			log.error("Failed to update employee ID: {}. Phone number {} is already in use by employee ID: {}", id,
+					requestDto.getPhoneNumber(), employeeWithSamePhone.get().getId());
+			throw new DuplicateResourceException(
+					"Phone number " + requestDto.getPhoneNumber() + " is already in use by another employee.");
+		}
+
+		existingEmployee.setFirstName(requestDto.getFirstName());
+		existingEmployee.setLastName(requestDto.getLastName());
+		existingEmployee.setEmail(requestDto.getEmail());
+		existingEmployee.setPhoneNumber(requestDto.getPhoneNumber());
+		existingEmployee.setRole(role);
+
+		Employee updatedEmployee = employeeRepository.save(existingEmployee);
+		log.info("Successfully updated employee with ID: {}", updatedEmployee.getId());
+		return employeeMapper.toResponseDto(updatedEmployee);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<EmployeeResponseDto> getAllEmployees() {
+		log.debug("Fetching all active employees.");
+		List<EmployeeResponseDto> employees = employeeRepository.findAllByIsDeletedFalse().stream()
+				.map(employeeMapper::toResponseDto).collect(Collectors.toList());
+		log.debug("Found {} active employees.", employees.size());
+		return employees;
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public Optional<EmployeeResponseDto> getEmployeeById(Long id) {
+		log.debug("Attempting to find active employee by ID: {}", id);
+		Optional<EmployeeResponseDto> employee = employeeRepository.findByIdAndIsDeletedFalse(id)
+				.map(employeeMapper::toResponseDto);
+		if (employee.isPresent()) {
+			log.debug("Found active employee with ID: {}", id);
+		} else {
+			log.warn("No active employee found with ID: {}", id);
+		}
+		return employee;
+	}
+
+	@Override
+	public void deleteEmployee(Long id) {
+		log.info("Attempting to deactivate employee with ID: {}", id);
+		Employee employee = employeeRepository.findByIdAndIsDeletedFalse(id).orElseThrow(() -> {
+			log.error("Failed to deactivate. Employee not found with ID: {}", id);
+			return new ResourceNotFoundException("Employee not found with ID: " + id);
+		});
+
+		employee.setDeleted(true);
+		employeeRepository.save(employee);
+		log.info("Successfully deactivated employee with ID: {}", id);
+	}
+
+	@Override
+	@Transactional(readOnly = true)
+	public List<EmployeeResponseDto> getDeactivatedEmployees() {
+		log.debug("Fetching all deactivated employees.");
+		List<EmployeeResponseDto> employees = employeeRepository.findAllByIsDeletedTrue().stream()
+				.map(employeeMapper::toResponseDto).collect(Collectors.toList());
+		log.debug("Found {} deactivated employees.", employees.size());
+		return employees;
+	}
+
+	@Override
+	public EmployeeResponseDto activateEmployee(Long id) {
+		log.info("Attempting to activate employee with ID: {}", id);
+		Employee employee = employeeRepository.findById(id).orElseThrow(() -> {
+			log.error("Failed to activate. Employee not found with ID: {}", id);
+			return new ResourceNotFoundException("Employee not found with ID: " + id);
+		});
+
+		if (!employee.isDeleted()) {
+			log.warn("Attempted to activate an employee (ID: {}) who is already active.", id);
+		}
+
+		employee.setDeleted(false);
+		Employee activatedEmployee = employeeRepository.save(employee);
+		log.info("Successfully activated employee with ID: {}", id);
+		return employeeMapper.toResponseDto(activatedEmployee);
+	}
+}
