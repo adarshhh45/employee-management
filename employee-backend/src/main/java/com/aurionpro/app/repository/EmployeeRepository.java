@@ -21,7 +21,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     
     boolean existsByPhoneNumberAndIsDeletedFalse(String phoneNumber);
     Optional<Employee> findByPhoneNumberAndIsDeletedFalse(String phoneNumber);
-    
     Optional<Employee> findByEmailAndIsDeletedFalse(String email);
 
+    boolean existsByEmail(String email);
+    boolean existsByPhoneNumber(String phoneNumber);
+
+    Optional<Employee> findByEmail(String email);
+    Optional<Employee> findByPhoneNumber(String phoneNumber);
 }
