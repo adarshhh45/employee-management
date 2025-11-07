@@ -37,6 +37,83 @@ public class EmployeeServiceImpl implements EmployeeService {
 		this.roleRepository = roleRepository;
 		this.employeeMapper = employeeMapper;
 	}
+	
+	private String capitalizeFirstLetter(String str) {
+		if (str == null || str.isEmpty()) {
+			return str;
+		}
+		return str.substring(0, 1).toUpperCase() + str.substring(1).toLowerCase();
+	}
+
+	@Override
+	public EmployeeResponseDto addEmployee(EmployeeRequestDto requestDto) {
+		log.info("Attempting to add a new employee with email: {}", requestDto.getEmail());
+
+		if (employeeRepository.existsByEmail(requestDto.getEmail())) {
+			log.error("Failed to add employee. Email {} already exists in the system.", requestDto.getEmail());
+			throw new DuplicateResourceException("An employee with email " + requestDto.getEmail() + " already exists.");
+		}
+		
+		if (employeeRepository.existsByPhoneNumber(requestDto.getPhoneNumber())) {
+			log.error("Failed to add employee. Phone number {} already exists in the system.", requestDto.getPhoneNumber());
+			throw new DuplicateResourceException(
+					"An employee with phone number " + requestDto.getPhoneNumber() + " already exists.");
+		}
+
+		roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
+			log.error("Failed to add employee. Role not found with ID: {}", requestDto.getRoleId());
+			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
+		});
+
+		Employee employee = employeeMapper.toEntity(requestDto);
+		employee.setFirstName(capitalizeFirstLetter(requestDto.getFirstName()));
+		employee.setLastName(capitalizeFirstLetter(requestDto.getLastName()));
+		
+		Employee savedEmployee = employeeRepository.save(employee);
+
+		log.info("Successfully added new employee with ID: {} and Email: {}", savedEmployee.getId(),
+				savedEmployee.getEmail());
+		return employeeMapper.toResponseDto(savedEmployee);
+	}
+
+	@Override
+	public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto requestDto) {
+		log.info("Attempting to update employee with ID: {}", id);
+
+		Employee existingEmployee = employeeRepository.findByIdAndIsDeletedFalse(id).orElseThrow(() -> {
+			log.error("Failed to update. Employee not found with ID: {}", id);
+			return new ResourceNotFoundException("Employee not found with ID: " + id);
+		});
+
+		Optional<Employee> employeeWithSameEmail = employeeRepository.findByEmail(requestDto.getEmail());
+		if (employeeWithSameEmail.isPresent() && !employeeWithSameEmail.get().getId().equals(id)) {
+			log.error("Failed to update employee ID: {}. Email {} is already in use by another employee.", id, requestDto.getEmail());
+			throw new DuplicateResourceException("Email " + requestDto.getEmail() + " is already in use by another employee.");
+		}
+		
+		Optional<Employee> employeeWithSamePhone = employeeRepository.findByPhoneNumber(requestDto.getPhoneNumber());
+		if (employeeWithSamePhone.isPresent() && !employeeWithSamePhone.get().getId().equals(id)) {
+			log.error("Failed to update employee ID: {}. Phone number {} is already in use by employee ID: {}", id,
+					requestDto.getPhoneNumber(), employeeWithSamePhone.get().getId());
+			throw new DuplicateResourceException(
+					"Phone number " + requestDto.getPhoneNumber() + " is already in use by another employee.");
+		}
+
+		Role role = roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
+			log.error("Failed to update employee ID: {}. Role not found with ID: {}", id, requestDto.getRoleId());
+			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
+		});
+
+		existingEmployee.setFirstName(capitalizeFirstLetter(requestDto.getFirstName()));
+		existingEmployee.setLastName(capitalizeFirstLetter(requestDto.getLastName()));
+		existingEmployee.setEmail(requestDto.getEmail());
+		existingEmployee.setPhoneNumber(requestDto.getPhoneNumber());
+		existingEmployee.setRole(role);
+
+		Employee updatedEmployee = employeeRepository.save(existingEmployee);
+		log.info("Successfully updated employee with ID: {}", updatedEmployee.getId());
+		return employeeMapper.toResponseDto(updatedEmployee);
+	}
 
 	@Override
 	public void downloadEmployeesAsCsv(HttpServletResponse response) throws IOException {
@@ -44,7 +121,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 		List<EmployeeResponseDto> employees = getAllEmployees();
 		
 		try (CSVPrinter csvPrinter = new CSVPrinter(response.getWriter(), CSVFormat.DEFAULT)) {
-			//define csv headers
 			String[] headers = {"ID", "First Name", "Last Name", "Email", "Phone Number", "Department", "Role"};
 			csvPrinter.printRecord(headers);
 
@@ -65,76 +141,6 @@ public class EmployeeServiceImpl implements EmployeeService {
 			throw e;
 		}
 	}
-
-	@Override
-	public EmployeeResponseDto addEmployee(EmployeeRequestDto requestDto) {
-		log.info("Attempting to add a new employee with email: {}", requestDto.getEmail());
-
-		if (employeeRepository.existsByEmailAndIsDeletedFalse(requestDto.getEmail())) {
-			log.error("Failed to add employee. Email {} already exists.", requestDto.getEmail());
-			throw new DuplicateResourceException("Employee with email " + requestDto.getEmail() + " already exists.");
-		}
-		if (employeeRepository.existsByPhoneNumberAndIsDeletedFalse(requestDto.getPhoneNumber())) {
-			log.error("Failed to add employee. Phone number {} already exists.", requestDto.getPhoneNumber());
-			throw new DuplicateResourceException(
-					"Employee with phone number " + requestDto.getPhoneNumber() + " already exists.");
-		}
-
-		roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
-			log.error("Failed to add employee. Role not found with ID: {}", requestDto.getRoleId());
-			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
-		});
-
-		Employee employee = employeeMapper.toEntity(requestDto);
-		Employee savedEmployee = employeeRepository.save(employee);
-
-		log.info("Successfully added new employee with ID: {} and Email: {}", savedEmployee.getId(),
-				savedEmployee.getEmail());
-		return employeeMapper.toResponseDto(savedEmployee);
-	}
-
-	@Override
-	public EmployeeResponseDto updateEmployee(Long id, EmployeeRequestDto requestDto) {
-		log.info("Attempting to update employee with ID: {}", id);
-
-		Employee existingEmployee = employeeRepository.findByIdAndIsDeletedFalse(id).orElseThrow(() -> {
-			log.error("Failed to update. Employee not found with ID: {}", id);
-			return new ResourceNotFoundException("Employee not found with ID: " + id);
-		});
-
-        //for email check
-		Optional<Employee> employeeWithSameEmail = employeeRepository.findByEmailAndIsDeletedFalse(requestDto.getEmail());
-		if (employeeWithSameEmail.isPresent() && !employeeWithSameEmail.get().getId().equals(id)) {
-			log.error("Failed to update employee ID: {}. Email {} is already in use by another employee.", id, requestDto.getEmail());
-			throw new DuplicateResourceException("Email " + requestDto.getEmail() + " is already in use by another employee.");
-		}
-		
-		//for phone no. check
-		Optional<Employee> employeeWithSamePhone = employeeRepository
-				.findByPhoneNumberAndIsDeletedFalse(requestDto.getPhoneNumber());
-		if (employeeWithSamePhone.isPresent() && !employeeWithSamePhone.get().getId().equals(id)) {
-			log.error("Failed to update employee ID: {}. Phone number {} is already in use by employee ID: {}", id,
-					requestDto.getPhoneNumber(), employeeWithSamePhone.get().getId());
-			throw new DuplicateResourceException(
-					"Phone number " + requestDto.getPhoneNumber() + " is already in use by another employee.");
-		}
-
-		Role role = roleRepository.findById(requestDto.getRoleId()).orElseThrow(() -> {
-			log.error("Failed to update employee ID: {}. Role not found with ID: {}", id, requestDto.getRoleId());
-			return new ResourceNotFoundException("Role not found with ID: " + requestDto.getRoleId());
-		});
-
-		existingEmployee.setFirstName(requestDto.getFirstName());
-		existingEmployee.setLastName(requestDto.getLastName());
-		existingEmployee.setEmail(requestDto.getEmail());
-		existingEmployee.setPhoneNumber(requestDto.getPhoneNumber());
-		existingEmployee.setRole(role);
-
-		Employee updatedEmployee = employeeRepository.save(existingEmployee);
-		log.info("Successfully updated employee with ID: {}", updatedEmployee.getId());
-		return employeeMapper.toResponseDto(updatedEmployee);
-	}
-
 
 	@Override
 	@Transactional(readOnly = true)

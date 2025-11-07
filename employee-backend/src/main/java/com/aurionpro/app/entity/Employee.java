@@ -1,26 +1,21 @@
 package com.aurionpro.app.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
-import jakarta.persistence.Table;
+import jakarta.persistence.*; // Import everything from jakarta.persistence
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
-import jakarta.persistence.GeneratedValue; 
-import jakarta.persistence.GenerationType;
 
 @Entity
 @Data
 @Getter
 @Setter
-@Table(name = "employee")
+@Table(name = "employee", uniqueConstraints = {
+    @UniqueConstraint(name = "uk_employee_email", columnNames = "email"),
+    @UniqueConstraint(name = "uk_employee_phone_number", columnNames = "phone_number")
+})
 public class Employee {
 
     @Id
@@ -38,10 +33,10 @@ public class Employee {
 
     @NotBlank(message = "Email is mandatory")
     @Email(message = "Email should be valid")
-    @Column(name = "email", nullable = false, unique = true)
+    @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "phone_number", unique = true)
+    @Column(name = "phone_number") 
     private String phoneNumber;
 
     @Column(name = "is_deleted")
@@ -51,11 +46,4 @@ public class Employee {
     @JoinColumn(name = "role_id")
     private Role role;
 
-    public boolean isDeleted() {
-        return isDeleted;
-    }
-
-    public void setDeleted(boolean deleted) {
-        isDeleted = deleted;
-    }
 }
